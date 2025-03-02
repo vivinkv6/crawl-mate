@@ -11,10 +11,29 @@ const extractContactInfo = ($) => {
     whatsapp: []
   };
 
-  // Extract emails
+  // Extract emails from both text content and href attributes
   const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+  
+  // Extract from text content
   $('body').text().match(emailRegex)?.forEach(email => {
     if (!contacts.emails.includes(email)) contacts.emails.push(email);
+  });
+
+  // Extract from mailto: links
+  $('a[href^="mailto:"]').each((_, element) => {
+    const href = $(element).attr('href');
+    const email = href.replace('mailto:', '').split('?')[0].trim();
+    if (email && email.match(emailRegex) && !contacts.emails.includes(email)) {
+      contacts.emails.push(email);
+    }
+  });
+
+  // Extract from meta tags
+  $('meta[name*="email"], meta[property*="email"]').each((_, element) => {
+    const content = $(element).attr('content');
+    if (content && content.match(emailRegex) && !contacts.emails.includes(content)) {
+      contacts.emails.push(content);
+    }
   });
 
   // Extract phone numbers (including WhatsApp)
@@ -243,21 +262,62 @@ const extractDocuments = ($) => {
 // Helper function to extract social media links
 const extractSocialMedia = ($) => {
   const socialMedia = [];
-  const socialPlatforms = [
-    'facebook.com',
-    'twitter.com',
-    'instagram.com',
-    'linkedin.com',
-    'youtube.com',
-    'pinterest.com',
-    'tiktok.com'
-  ];
+  const socialPlatforms = {
+    'facebook': ['facebook.com', 'fb.com', 'fb.me'],
+    'twitter': ['twitter.com', 'x.com'],
+    'instagram': ['instagram.com', 'instagr.am'],
+    'linkedin': ['linkedin.com', 'lnkd.in'],
+    'youtube': ['youtube.com', 'youtu.be'],
+    'pinterest': ['pinterest.com', 'pin.it'],
+    'tiktok': ['tiktok.com', 'vm.tiktok.com'],
+    'snapchat': ['snapchat.com'],
+    'reddit': ['reddit.com'],
+    'medium': ['medium.com'],
+    'github': ['github.com'],
+    'telegram': ['t.me', 'telegram.me'],
+    'whatsapp': ['wa.me', 'whatsapp.com']
+  };
 
   $('a').each((_, element) => {
     const href = $(element).attr('href');
     if (href) {
-      const platform = socialPlatforms.find(platform => href.includes(platform));
-      if (platform && !socialMedia.includes(href)) socialMedia.push(href);
+      try {
+        // Normalize the URL
+        let normalizedUrl = href.toLowerCase();
+        if (normalizedUrl.startsWith('//')) {
+          normalizedUrl = 'https:' + normalizedUrl;
+        }
+        
+        // Check if URL contains any social platform domain
+        for (const [platform, domains] of Object.entries(socialPlatforms)) {
+          if (domains.some(domain => normalizedUrl.includes(domain))) {
+            try {
+              // Attempt to create a valid URL
+              const url = new URL(normalizedUrl);
+              const fullUrl = url.href;
+              
+              // Ensure the URL is unique
+              if (!socialMedia.includes(fullUrl)) {
+                socialMedia.push(fullUrl);
+              }
+            } catch (urlError) {
+              // If URL is relative, try to make it absolute
+              try {
+                const baseUrl = 'https://' + domains[0];
+                const absoluteUrl = new URL(normalizedUrl, baseUrl).href;
+                if (!socialMedia.includes(absoluteUrl)) {
+                  socialMedia.push(absoluteUrl);
+                }
+              } catch (e) {
+                console.error(`Invalid social media URL: ${href}`);
+              }
+            }
+            break; // Exit loop once platform is found
+          }
+        }
+      } catch (error) {
+        console.error(`Error processing social media link: ${href}`, error);
+      }
     }
   });
   return socialMedia;
@@ -399,7 +459,7 @@ const scrapePage = async (url, contentType) => {
       result.content = extractContent($);
     }
 
-    if (contentType === 'all') {
+    if (contentType === 'all' || contentType === 'contact') {
       result.contacts = extractContactInfo($);
     }
 
