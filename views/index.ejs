@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>CrawlMate - Web Scraping Made Easy</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="CrawlMate - A powerful web scraping tool that helps you extract images, videos, and links from any website easily.">
+  <meta name="keywords" content="web scraping, crawler, website analysis, data extraction">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="/stylesheets/style.css">
+  <link rel="icon" type="image/png" href="/images/favicon.png">
+</head>
+<body>
+  <!-- Notification Container -->
+  <div id="notificationContainer"></div>
+
+  <div class="container-fluid container-lg mt-4 mt-lg-5 px-3 px-lg-5" style="max-width: 1400px; margin-left: auto; margin-right: auto;">
+    <h1 class="text-center mb-2 fs-2 fs-lg-1 fw-bold">CrawlMate</h1>
+    <p class="text-center mb-4 text-muted fs-6 fs-md-5">Web Scraping Made Easy</p>
+    
+    <div class="row justify-content-center">
+      <div class="col-12 col-md-10 col-lg-8">
+        <div class="card shadow-sm">
+          <div class="card-body p-3 p-md-4">
+            <form id="scrapeForm">
+              <div class="mb-3">
+                <label for="urlInput" class="form-label">Enter Website URL</label>
+                <input type="url" class="form-control form-control-lg" id="urlInput" required placeholder="https://example.com">
+              </div>
+              <div class="mb-3">
+                <label for="contentType" class="form-label">Content Type</label>
+                <select class="form-select form-select-lg" id="contentType" name="contentType">
+                  <option value="all" selected>All Content</option>
+                  <option value="meta">Meta Tags</option>
+                  <option value="images">Images</option>
+                  <option value="videos">Videos</option>
+                  <option value="documents">Documents</option>
+                  <option value="content">Content</option>
+                  <option value="links">Links</option>
+                  <option value="social">Social Media</option>
+                </select>
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Crawl Scope</label>
+                <div class="d-flex flex-wrap align-items-center gap-4 mb-3">
+                  <div class="d-flex gap-4 flex-grow-1">
+                    <div class="form-check">
+                      <input class="form-check-input" type="radio" name="crawlScope" id="entireWebsite" value="entire" checked>
+                      <label class="form-check-label" for="entireWebsite">
+                        Entire Website
+                      </label>
+                    </div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="radio" name="crawlScope" id="singlePage" value="single">
+                      <label class="form-check-label" for="singlePage">
+                        Single Page
+                      </label>
+                    </div>
+                  </div>
+                  <button class="btn btn-success d-none" id="downloadButton" disabled>
+                    <i class="bi bi-download"></i> Download
+                  </button>
+                </div>
+              </div>
+              <button type="submit" class="btn btn-primary btn-lg w-100 w-md-auto" id="scrapeButton">
+                <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                Crawl Now
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <div id="resultCard" class="card mt-4 d-none">
+          <div class="card-body">
+            <div class="accordion" id="scrapedDataAccordion">
+              <!-- Dynamic content will be inserted here by JavaScript -->
+            </div>
+          </div>
+        </div>
+
+        <div id="errorAlert" class="alert alert-danger mt-4 d-none" role="alert"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Image Modal -->
+  <div class="modal fade" id="imageModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body text-center p-0">
+          <img src="" class="img-fluid" id="modalImage">
+        </div>
+        <div class="modal-footer justify-content-between">
+          <button type="button" class="btn btn-outline-primary" id="prevImage">Previous</button>
+          <button type="button" class="btn btn-outline-primary" id="nextImage">Next</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Video Modal -->
+  <div class="modal fade" id="videoModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <div class="ratio ratio-16x9" id="videoContainer"></div>
+        </div>
+        <div class="modal-footer justify-content-between">
+          <button type="button" class="btn btn-outline-primary" id="prevVideo">Previous</button>
+          <button type="button" class="btn btn-outline-primary" id="nextVideo">Next</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.8/dist/umd/popper.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="/javascripts/notification.js"></script>
+  <script src="/javascripts/download.js"></script>
+  <script src="/javascripts/scraper.js"></script>
+</body>
+</html>
