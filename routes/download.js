@@ -5,6 +5,14 @@ const path = require('path');
 const axios = require('axios');
 const archiver = require('archiver');
 const { v4: uuidv4 } = require('uuid');
+const XLSX = require('xlsx');
+
+
+// Create archive instance per request to prevent queue closure issues
+const createArchive = () => archiver('zip', {
+  zlib: { level: 9 } // Maximum compression
+});
+const archive = createArchive(); // Create new archive instance for each request
 
 const ensureDirectoryExists = (dirPath) => {
   try {
@@ -89,16 +97,16 @@ const cleanupUploads = () => {
 
 // POST endpoint for processing scraped data
 router.post('/', async (req, res) => {
-  const { data, contentType, scrapeScope } = req.body;
+  const { data, contentType, scrapeScope, format = ['json', 'xlsx'] } = req.body;
   const sessionId = uuidv4();
   const uploadsDir = path.join(__dirname, '..', 'uploads', sessionId);
+  const archive = createArchive(); // Create new archive instance for each request
 
   try {
     // Check if data contains error information
     if (scrapeScope === 'single' && data.error) {
       throw new Error(data.error);
     } else if (scrapeScope !== 'single' && data.pages) {
-      // Check if all pages have errors
       const allErrors = data.pages.every(page => page.error);
       if (allErrors) {
         throw new Error('Failed to scrape any valid content from the website');
@@ -107,6 +115,143 @@ router.post('/', async (req, res) => {
 
     ensureDirectoryExists(uploadsDir);
 
+    // Handle Excel format
+    if (format.includes('xlsx')) {
+      const workbook = XLSX.utils.book_new();
+      const pages = scrapeScope === 'single' ? [data] : data.pages;
+
+      // Process meta information
+      if (contentType === 'all' || contentType === 'meta') {
+        // Extract meta tags and create column headers
+        const metaHeaders = new Set(['url']);
+        pages.forEach(page => {
+          if (page.meta) {
+            page.meta.forEach(meta => {
+              if (meta.name) metaHeaders.add(`meta_${meta.name}`);
+              if (meta.property) metaHeaders.add(`og_${meta.property.replace('og:', '')}`);
+            });
+          }
+        });
+
+        // Create meta data with organized columns
+        const metaData = pages.map(page => {
+          const row = { url: page.url };
+          if (page.meta) {
+            page.meta.forEach(meta => {
+              if (meta.name) row[`meta_${meta.name}`] = meta.content;
+              if (meta.property) row[`og_${meta.property.replace('og:', '')}`] = meta.content;
+            });
+          }
+          return row;
+        });
+
+        // Create worksheet with headers
+        const metaSheet = XLSX.utils.json_to_sheet(metaData, {
+          header: Array.from(metaHeaders)
+        });
+
+        // Adjust column widths
+        const columnWidths = {};
+        Array.from(metaHeaders).forEach((header, index) => {
+          columnWidths[XLSX.utils.encode_col(index)] = { wch: Math.max(header.length, 15) };
+        });
+        metaSheet['!cols'] = Object.values(columnWidths);
+
+        XLSX.utils.book_append_sheet(workbook, metaSheet, 'Meta');
+
+      }
+
+      // Process images
+      if (contentType === 'all' || contentType === 'images') {
+        const imageData = pages.flatMap(page => 
+          (page.images || []).map(img => ({
+            pageUrl: page.url,
+            imageUrl: img
+          }))
+        );
+        const imageSheet = XLSX.utils.json_to_sheet(imageData);
+        XLSX.utils.book_append_sheet(workbook, imageSheet, 'Images');
+      }
+
+      // Process videos
+      if (contentType === 'all' || contentType === 'videos') {
+        const videoData = pages.flatMap(page =>
+          (page.videos || []).map(video => ({
+            pageUrl: page.url,
+            videoUrl: video
+          }))
+        );
+        const videoSheet = XLSX.utils.json_to_sheet(videoData);
+        XLSX.utils.book_append_sheet(workbook, videoSheet, 'Videos');
+      }
+
+      // Process documents
+      if (contentType === 'all' || contentType === 'documents') {
+        const docData = pages.flatMap(page =>
+          (page.documents || []).map(doc => ({
+            pageUrl: page.url,
+            documentUrl: doc
+          }))
+        );
+        const docSheet = XLSX.utils.json_to_sheet(docData);
+        XLSX.utils.book_append_sheet(workbook, docSheet, 'Documents');
+      }
+
+      // Process social media
+      if (contentType === 'all' || contentType === 'social') {
+        const socialData = pages.flatMap(page =>
+          (page.socialMedia || []).map(social => ({
+            pageUrl: page.url,
+            platform: social.platform,
+            url: social.url
+          }))
+        );
+        const socialSheet = XLSX.utils.json_to_sheet(socialData);
+        XLSX.utils.book_append_sheet(workbook, socialSheet, 'Social Media');
+      }
+
+      // Process links
+      if (contentType === 'all' || contentType === 'links') {
+        const linkData = pages.flatMap(page =>
+          (page.links || []).map(link => ({
+            pageUrl: page.url,
+            link: link
+          }))
+        );
+        const linkSheet = XLSX.utils.json_to_sheet(linkData);
+        XLSX.utils.book_append_sheet(workbook, linkSheet, 'Links');
+      }
+
+      // Process contacts
+      if (contentType === 'all' || contentType === 'contact') {
+        const contactData = pages.map(page => ({
+          pageUrl: page.url,
+          ...page.contacts
+        }));
+        const contactSheet = XLSX.utils.json_to_sheet(contactData);
+        XLSX.utils.book_append_sheet(workbook, contactSheet, 'Contacts');
+      }
+
+      // Write Excel file
+      const excelPath = path.join(uploadsDir, 'scraped_data.xlsx');
+      XLSX.writeFile(workbook, excelPath);
+     
+      // Always add Excel file to ZIP archive
+      archive.file(excelPath, { name: 'scraped_data.xlsx' });
+      
+      // If only Excel format is requested, send Excel file directly
+      if (!format.includes('json')) {
+        res.download(excelPath, 'scraped_data.xlsx', (err) => {
+          if (err) {
+            console.error('Error sending file:', err);
+          }
+          cleanupUploads(uploadsDir);
+        });
+        return;
+      }
+    }
+
+    // Handle JSON format (existing code)
     const pages = scrapeScope === 'single' ? [data] : data.pages;
     const processedData = [];
     const failedImageDownloads = [];
@@ -114,18 +259,15 @@ router.post('/', async (req, res) => {
     // Create a write stream for the ZIP file
     const zipPath = path.join(uploadsDir, 'scraped_data.zip');
     const output = fs.createWriteStream(zipPath);
-    const archive = archiver('zip', {
-      zlib: { level: 9 } // Maximum compression
-    });
-
+    
     // Listen for archive errors
     archive.on('error', (err) => {
       throw err;
     });
-
+    
     // Pipe archive data to the file
     archive.pipe(output);
-
+    
     // Process each page
     for (let i = 0; i < pages.length; i++) {
       const page = pages[i];
