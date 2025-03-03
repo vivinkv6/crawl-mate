@@ -200,13 +200,33 @@ router.post('/', async (req, res) => {
       // Process social media
       if (contentType === 'all' || contentType === 'social') {
         const socialData = pages.flatMap(page =>
-          (page.socialMedia || []).map(social => ({
-            pageUrl: page.url,
-            platform: social.platform,
-            url: social.url
-          }))
+          (page.socialMedia || []).map(social => {
+            const platform = social.includes('facebook.com') ? 'Facebook' :
+                           social.includes('twitter.com') || social.includes('x.com') ? 'Twitter' :
+                           social.includes('instagram.com') ? 'Instagram' :
+                           social.includes('linkedin.com') ? 'LinkedIn' :
+                           social.includes('youtube.com') ? 'YouTube' :
+                           social.includes('pinterest.com') ? 'Pinterest' :
+                           social.includes('tiktok.com') ? 'TikTok' :
+                           social.includes('github')? 'GitHub' :
+                           'Other';
+            return {
+              'Source Page': page.url,
+              'Platform': platform,
+              'Social Media URL': social
+            };
+          })
         );
-        const socialSheet = XLSX.utils.json_to_sheet(socialData);
+        const socialHeaders = ['Source Page', 'Platform', 'Social Media URL'];
+        const socialSheet = XLSX.utils.json_to_sheet(socialData, { header: socialHeaders });
+        
+        // Adjust column widths
+        const socialColumnWidths = {};
+        socialHeaders.forEach((header, index) => {
+          socialColumnWidths[XLSX.utils.encode_col(index)] = { wch: Math.max(header.length * 1.5, 15) };
+        });
+        socialSheet['!cols'] = Object.values(socialColumnWidths);
+        
         XLSX.utils.book_append_sheet(workbook, socialSheet, 'Social Media');
       }
 
@@ -214,11 +234,21 @@ router.post('/', async (req, res) => {
       if (contentType === 'all' || contentType === 'links') {
         const linkData = pages.flatMap(page =>
           (page.links || []).map(link => ({
-            pageUrl: page.url,
-            link: link
+            'Source Page': page.url,
+            'Link URL': link,
+            'Link Type': link.startsWith('http') ? 'External' : 'Internal'
           }))
         );
-        const linkSheet = XLSX.utils.json_to_sheet(linkData);
+        const linkHeaders = ['Source Page', 'Link URL', 'Link Type'];
+        const linkSheet = XLSX.utils.json_to_sheet(linkData, { header: linkHeaders });
+        
+        // Adjust column widths
+        const linkColumnWidths = {};
+        linkHeaders.forEach((header, index) => {
+          linkColumnWidths[XLSX.utils.encode_col(index)] = { wch: Math.max(header.length * 1.5, 15) };
+        });
+        linkSheet['!cols'] = Object.values(linkColumnWidths);
+        
         XLSX.utils.book_append_sheet(workbook, linkSheet, 'Links');
       }
 
